@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Information Add-in</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 min-h-screen flex items-center justify-center">
+
+    <div id="app" class="w-full max-w-sm bg-white rounded-xl shadow-lg p-6 flex flex-col items-center justify-center">
+
+        <!-- Loading state -->
+        <div id="loading" class="flex flex-col items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-12 w-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-gray-700">Loading asset information...</p>
+        </div>
+
+        <!-- Data display state -->
+        <div id="data-container" class="hidden w-full space-y-4">
+            <h1 class="text-2xl font-bold text-center text-gray-800">Vehicle Details</h1>
+            <div class="space-y-3">
+                <div class="bg-blue-50 rounded-lg p-4 shadow-sm">
+                    <p class="text-sm font-medium text-blue-700">VIN</p>
+                    <p id="vin" class="mt-1 text-lg font-semibold text-blue-900 truncate">--</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 shadow-sm">
+                    <p class="text-sm font-medium text-green-700">License Plate</p>
+                    <p id="license-plate" class="mt-1 text-lg font-semibold text-green-900 truncate">--</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error/No Data state -->
+        <div id="error-container" class="hidden w-full text-center">
+            <p id="error-message" class="text-red-600 font-semibold">Failed to load data.</p>
+        </div>
+    </div>
+
+    <script>
+        // The Geotab Drive SDK provides the 'geotab.addin' object automatically
+        // when the add-in is loaded within the Geotab Drive application.
+        // This is the entry point for your add-in.
+        geotab.addin.drive = function () {
+            'use strict';
+
+            // Get references to the DOM elements
+            const loadingElement = document.getElementById('loading');
+            const dataContainer = document.getElementById('data-container');
+            const errorContainer = document.getElementById('error-container');
+            const errorMessageElement = document.getElementById('error-message');
+            const vinElement = document.getElementById('vin');
+            const licensePlateElement = document.getElementById('license-plate');
+
+            // Helper function to display an error message
+            const displayError = (message) => {
+                loadingElement.classList.add('hidden');
+                dataContainer.classList.add('hidden');
+                errorContainer.classList.remove('hidden');
+                errorMessageElement.textContent = message;
+            };
+
+            return {
+                /**
+                 * Called when the add-in is first loaded.
+                 * @param {Object} freshApi The Geotab API object.
+                 * @param {Object} freshState The Geotab add-in state.
+                 * @param {Function} initializeCallback The callback to signal initialization is complete.
+                 */
+                startup: async (freshApi, freshState, initializeCallback) => {
+                    loadingElement.classList.remove('hidden');
+                    dataContainer.classList.add('hidden');
+                    errorContainer.classList.add('hidden');
+
+                    try {
+                        const deviceId = freshState.device.id;
+                        if (!deviceId) {
+                            displayError("No active vehicle found.");
+                            // The `initializeCallback()` must always be called for the add-in to load correctly.
+                            initializeCallback();
+                            return;
+                        }
+
+                        // Get the device details (VIN and License Plate)
+                        const deviceResult = await freshApi.call('Get', {
+                            typeName: 'Device',
+                            search: { id: deviceId }
+                        });
+
+                        // Extract data from the results
+                        const device = deviceResult.length > 0 ? deviceResult[0] : null;
+
+                        // Display the VIN
+                        const vin = device?.vehicleIdentificationNumber || 'N/A';
+                        vinElement.textContent = vin;
+
+                        // Display the license plate
+                        const licensePlate = device?.licensePlate || 'N/A';
+                        licensePlateElement.textContent = licensePlate;
+
+                        // Show the data container and hide the loading indicator
+                        loadingElement.classList.add('hidden');
+                        dataContainer.classList.remove('hidden');
+
+                    } catch (e) {
+                        console.error('An error occurred:', e);
+                        displayError('Failed to retrieve asset data. Please check permissions.');
+                    }
+
+                    // This callback is required by the Geotab Drive SDK
+                    initializeCallback();
+                },
+
+                /**
+                 * Called when the add-in is focused in the UI.
+                 */
+                focus: () => {
+                    // Re-run startup to refresh data when the user focuses the add-in
+                    // This is good practice for real-time information.
+                    // This will be called automatically by the SDK.
+                    geotab.addin.drive.startup(geotab.api, geotab.state, () => {});
+                },
+
+                /**
+                 * Called when the add-in is no longer in focus.
+                 */
+                blur: () => {
+                    // No specific action needed when the add-in loses focus.
+                }
+            };
+        };
+    </script>
+
+</body>
+</html>
